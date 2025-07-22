@@ -1,9 +1,8 @@
 FROM node:18
 
-# 🧱 Install required Chromium dependencies
+# Install Chromium dependencies
 RUN apt-get update && apt-get install -y \
-    wget \
-    ca-certificates \
+    chromium-browser \
     fonts-liberation \
     libappindicator3-1 \
     libasound2 \
@@ -14,7 +13,6 @@ RUN apt-get update && apt-get install -y \
     libgdk-pixbuf2.0-0 \
     libnspr4 \
     libnss3 \
-    libx11-xcb1 \
     libxcomposite1 \
     libxdamage1 \
     libxrandr2 \
@@ -22,17 +20,17 @@ RUN apt-get update && apt-get install -y \
     --no-install-recommends && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Set working dir
+# Set working directory
 WORKDIR /app
 
-# Copy and install
+# Copy files
 COPY . .
+
+# Install dependencies
 RUN npm install
 
-# Puppeteer will download Chromium itself (no need to add it separately)
-ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=false
-
+# Expose the port
 EXPOSE 5000
 
-# Start the app
+# Run with nodemon if in dev, otherwise node
 CMD ["node", "server.js"]

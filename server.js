@@ -1,23 +1,31 @@
 const express = require('express');
 const bodyParser = require('body-parser');
-const puppeteer = require('puppeteer');
-
+const puppeteer = require('puppeteer-core');  // 👈 Use puppeteer-core in Docker
 const app = express();
-const PORT = process.env.PORT || 5000;  // Use dynamic port if provided
 
-app.use(bodyParser.text({ limit: '10mb' }));
+const PORT = process.env.PORT || 5000;
 
+// Body parser to handle raw HTML string
+app.use(bodyParser.text({ limit: '10mb', type: '*/*' }));
+
+// Convert HTML to image
 app.post('/convert-html-to-image', async (req, res) => {
     const htmlContent = req.body;
 
-    if (!htmlContent) {
-        return res.status(400).send('No HTML content received');
+    if (!htmlContent || typeof htmlContent !== 'string') {
+        return res.status(400).send('No valid HTML content received');
     }
 
     try {
         const browser = await puppeteer.launch({
+            executablePath: '/usr/bin/chromium-browser', // ✅ For Docker with Chromium
             headless: 'new',
-            args: ['--no-sandbox', '--disable-setuid-sandbox'],
+            args: [
+                '--no-sandbox',
+                '--disable-setuid-sandbox',
+                '--disable-gpu',
+                '--disable-dev-shm-usage'
+            ],
         });
 
         const page = await browser.newPage();
@@ -34,7 +42,6 @@ app.post('/convert-html-to-image', async (req, res) => {
     }
 });
 
-// 👇 Listen on 0.0.0.0 for Coolify/production
 app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Server running on http://0.0.0.0:${PORT}`);
+    console.log(`✅ Server running on http://0.0.0.0:${PORT}`);
 });

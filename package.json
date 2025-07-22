@@ -11,6 +11,8 @@
   "description": "",
   "dependencies": {
     "express": "^5.1.0",
-    "node-html-to-image": "^5.0.0"
+    "node-html-to-image": "^5.0.0",
+    "body-parser": "^1.20.2",
+    "puppeteer-core": "^21.3.8"
   }
 }
