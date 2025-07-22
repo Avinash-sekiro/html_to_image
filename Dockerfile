@@ -1,6 +1,6 @@
 FROM node:18
 
-# 🧱 Install required Chromium dependencies
+# Install Chromium dependencies
 RUN apt-get update && apt-get install -y \
     wget \
     ca-certificates \
@@ -22,17 +22,14 @@ RUN apt-get update && apt-get install -y \
     --no-install-recommends && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Set working dir
+# Set working directory
 WORKDIR /app
 
-# Copy and install
+# Copy files and install dependencies
 COPY . .
 RUN npm install
 
-# Puppeteer will download Chromium itself (no need to add it separately)
-ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=false
-
 EXPOSE 5000
 
-# Start the app
+# Start server
 CMD ["node", "server.js"]
