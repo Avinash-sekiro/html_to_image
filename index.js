@@ -1,27 +1,38 @@
 const express = require("express");
-const bodyParser = require("body-parser");
 const nodeHtmlToImage = require("node-html-to-image");
-const puppeteer = require("puppeteer");
 
 const app = express();
-app.use(bodyParser.json({ limit: '2mb' }));
+app.use(express.json({ limit: '10mb' }));
 
-app.post("/image", async (req, res) => {
+app.post("/", async (req, res) => {
   try {
+    const { html } = req.body;
+    
+    if (!html) {
+      return res.status(400).json({ error: "html field is required" });
+    }
+
     const image = await nodeHtmlToImage({
-      html: req.body.html,
+      html: html,
       puppeteerArgs: {
-        args: ['--no-sandbox', '--disable-setuid-sandbox']
+        args: [
+          '--no-sandbox',
+          '--disable-setuid-sandbox',
+          '--disable-dev-shm-usage',
+          '--disable-gpu'
+        ]
       },
       encoding: "buffer"
     });
 
     res.setHeader("Content-Type", "image/png");
     res.send(image);
-  } catch (err) {
-    console.error("Error:", err);
-    res.status(500).send("Failed to convert HTML to image");
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 });
 
-app.listen(5000, () => console.log("✅ Server started on port 5000"));
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Server running on port ${PORT}`);
+});
