@@ -1,6 +1,6 @@
-FROM node:18
+FROM node:18-slim
 
-# Install Chromium dependencies
+# Install Chromium & dependencies
 RUN apt-get update && apt-get install -y \
     wget \
     ca-certificates \
@@ -18,18 +18,30 @@ RUN apt-get update && apt-get install -y \
     libxcomposite1 \
     libxdamage1 \
     libxrandr2 \
+    libxshmfence1 \
     xdg-utils \
+    libxext6 \
+    libxfixes3 \
+    libxi6 \
+    libglib2.0-0 \
+    libpangocairo-1.0-0 \
+    libpango-1.0-0 \
+    libjpeg-dev \
+    libx11-dev \
     --no-install-recommends && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Set working directory
 WORKDIR /app
 
-# Copy files and install dependencies
+# Copy project files
 COPY . .
+
+# Install NPM dependencies
 RUN npm install
 
+# Expose port
 EXPOSE 5000
 
-# Start server
+# Run app
 CMD ["node", "server.js"]
