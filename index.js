@@ -17,26 +17,15 @@ const supabase = createClient(
 const redis = createRedisClient({
   url: "redis://default:2LNEtD35z5Fzji5adNJifJccs4ClKG4LSKRNdQnQam1Nd6nj1hfuatteBiILfEKc@i4w8kc04g8ok8840k4w0w8ok:6379/0"
 });
-
-// Connect to Redis
 redis.connect().catch(console.error);
-
-// Redis error handling
-redis.on('error', (err) => {
-  console.error('Redis Client Error:', err);
-});
-redis.on('connect', () => {
-  console.log('✅ Connected to Redis');
-});
+redis.on('error', err => console.error('Redis Client Error:', err));
+redis.on('connect', () => console.log('✅ Connected to Redis'));
 
 // Helper function to filter cached data
 function filterData(data, filters) {
-  if (!filters || Object.keys(filters).length === 0) {
-    return data;
-  }
-
-  return data.filter(item => {
-    return Object.entries(filters).every(([column, value]) => {
+  if (!filters || Object.keys(filters).length === 0) return data;
+  return data.filter(item =>
+    Object.entries(filters).every(([column, value]) => {
       if (typeof value === 'object' && value !== null) {
         const { operator, value: filterValue } = value;
         switch (operator) {
@@ -54,8 +43,8 @@ function filterData(data, filters) {
       } else {
         return item[column] == value;
       }
-    });
-  });
+    })
+  );
 }
 
 // ---------- ROUTE 1: Convert HTML to Image ----------
@@ -84,7 +73,71 @@ fastify.post("/html-to-image", async (request, reply) => {
   }
 });
 
-// ---------- ROUTE 2: Smart Cache Query (Cache ALL, Filter Locally) ----------
+// ---------- ROUTE 2: Prompt Query Like SQL Required ----------
+fastify.post("/prompt", async (request, reply) => {
+  try {
+    const { activity_id, current_slide } = request.body;
+    if (!activity_id || typeof current_slide === "undefined")
+      return reply.status(400).send({ error: "activity_id and current_slide are required" });
+
+    const tableCacheKey = "public.prompt_table:ALL_DATA";
+    let allData = null;
+    const cachedAllData = await redis.get(tableCacheKey);
+
+    if (cachedAllData) {
+      console.log("Cache hit ✅ - Filtering from cached data");
+      allData = JSON.parse(cachedAllData);
+    } else {
+      // Fetch all data from Supabase
+      console.log("Cache miss ❌ - Fetching ALL prompt_table from Supabase...");
+      const { data, error } = await supabase
+        .schema("public")
+        .from("prompt_table")
+        .select("*");
+
+      if (error) throw error;
+      allData = data;
+      await redis.setEx(tableCacheKey, 600, JSON.stringify(allData));
+      console.log(`All prompt_table cached ✅ - ${allData.length} records`);
+    }
+
+    // Filter for activity_id
+    const filteredRows = filterData(allData, { activity_id: activity_id });
+
+    // Map to result like your SQL
+    const results = filteredRows.map(row => {
+      let promptPicContent = "";
+      if (Array.isArray(row.prompt_pic)) {
+        // Is JSONB array
+        promptPicContent = (row.prompt_pic && row.prompt_pic[current_slide]) || "";
+      } else if (typeof row.prompt_pic === "object" && row.prompt_pic !== null) {
+        // If array stored as object (happens with Postgres+supabase sometimes)
+        promptPicContent = row.prompt_pic[current_slide] || "";
+      } else {
+        promptPicContent = row.prompt_pic ? String(row.prompt_pic) : "";
+      }
+
+      return {
+        full_prompt: 
+          (row.pre_prompt || "") + " " +
+          promptPicContent + " " +
+          (row.post_prompt || ""),
+        model_number: row.model_number
+      };
+    });
+
+    reply.send({
+      from: cachedAllData ? "redis_filtered" : "supabase_fetched",
+      data: results,
+      filtered_records: results.length
+    });
+  } catch (err) {
+    console.error("Prompt route error:", err);
+    return reply.status(500).send({ error: err.message });
+  }
+});
+
+// ---------- ROUTE 3: Smart Cache Query (Cache ALL, Filter Locally) ----------
 fastify.post("/query", async (request, reply) => {
   try {
     const { table, schema = "prompt_info", filters = {}, columns = "*" } = request.body;
@@ -179,7 +232,7 @@ fastify.post("/query", async (request, reply) => {
   }
 });
 
-// ---------- ROUTE 2B: Direct activity_id Query (Uses Smart Cache) ----------
+// ---------- ROUTE 4: Direct activity_id Query (Uses Smart Cache) ----------
 fastify.get("/activity/:id", async (request, reply) => {
   try {
     const { id } = request.params;
@@ -232,7 +285,7 @@ fastify.get("/activity/:id", async (request, reply) => {
   }
 });
 
-// ---------- ROUTE 2C: SQL Query Support ----------
+// ---------- ROUTE 5: SQL Query Support ----------
 fastify.post("/sql-query", async (request, reply) => {
   try {
     const { sql } = request.body;
@@ -287,7 +340,7 @@ fastify.post("/sql-query", async (request, reply) => {
   }
 });
 
-// ---------- ROUTE 3: Users ----------
+// ---------- ROUTE 6: Users ----------
 fastify.get("/users", async (request, reply) => {
   try {
     const cacheKey = "users";
@@ -304,7 +357,7 @@ fastify.get("/users", async (request, reply) => {
   }
 });
 
-// ---------- ROUTE 4: User by ID ----------
+// ---------- ROUTE 7: User by ID ----------
 fastify.get("/users/:id", async (request, reply) => {
   try {
     const { id } = request.params;
@@ -322,7 +375,7 @@ fastify.get("/users/:id", async (request, reply) => {
   }
 });
 
-// ---------- ROUTE 5: All Activity Prompts ----------
+// ---------- ROUTE 8: All Activity Prompts ----------
 fastify.get("/activity-prompts", async (request, reply) => {
   try {
     const tableCacheKey = "prompt_info.activity_prompts:ALL_DATA";
@@ -339,7 +392,7 @@ fastify.get("/activity-prompts", async (request, reply) => {
   }
 });
 
-// ---------- ROUTE 6: Cache Stats ----------
+// ---------- ROUTE 9: Cache Stats ----------
 fastify.get("/cache-stats", async (request, reply) => {
   try {
     const keys = await redis.keys("*:ALL_DATA");
@@ -364,7 +417,7 @@ fastify.get("/cache-stats", async (request, reply) => {
   }
 });
 
-// ---------- HEALTH CHECK ----------
+// ---------- ROUTE 10: Health Check ----------
 fastify.get("/health", async (request, reply) => {
   try {
     const redisStatus = redis.isReady ? "connected" : "disconnected";
